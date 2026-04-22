@@ -1,0 +1,49 @@
+{
+  "name": "outlook-mcp-local",
+  "version": "0.1.0",
+  "description": "Local-first MCP server exposing Outlook / Microsoft 365 as tools for any MCP-capable LLM client. The Anti-Copilot for the BYOM market.",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "outlook",
+    "microsoft-graph",
+    "llm",
+    "byom",
+    "local-ai",
+    "anti-copilot"
+  ],
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "outlook-mcp-local": "./dist/index.js"
+  },
+  "main": "./dist/index.js",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18.17"
+  },
+  "scripts": {
+    "build": "tsc",
+    "postbuild": "node -e \"require('fs').chmodSync('dist/index.js', 0o755)\"",
+    "dev": "tsc --watch",
+    "start": "node dist/index.js",
+    "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\"",
+    "test": "npm run build && node scripts/test-paths.mjs && node scripts/test-createevent-tz.mjs && node scripts/test-account-type.mjs && node scripts/smoke-test.mjs",
+    "prepublishOnly": "npm run clean && npm run build"
+  },
+  "dependencies": {
+    "@azure/msal-node": "^2.16.2",
+    "@microsoft/microsoft-graph-client": "^3.0.7",
+    "@modelcontextprotocol/sdk": "^1.0.4",
+    "zod": "^3.23.8",
+    "zod-to-json-schema": "^3.23.5"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "typescript": "^5.5.4"
+  }
+}

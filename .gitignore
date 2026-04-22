@@ -1,0 +1,12 @@
+node_modules/
+dist/
+*.log
+.env
+.env.local
+.DS_Store
+.vscode/
+.idea/
+
+# Local token cache — should never be committed
+cache.json
+*.tokencache
