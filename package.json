@@ -1,6 +1,6 @@
 {
   "name": "outlook-mcp-local",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Local-first MCP server exposing Outlook / Microsoft 365 as tools for any MCP-capable LLM client. The Anti-Copilot for the BYOM market.",
   "keywords": [
     "mcp",
@@ -13,6 +13,18 @@
     "anti-copilot"
   ],
   "license": "MIT",
+  "homepage": "https://github.com/xdarkoy/outlook-mcp#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/xdarkoy/outlook-mcp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/xdarkoy/outlook-mcp/issues"
+  },
+  "author": {
+    "name": "Darko Strbac",
+    "url": "https://github.com/xdarkoy"
+  },
   "type": "module",
   "bin": {
     "outlook-mcp-local": "dist/index.js"

@@ -36,7 +36,7 @@ Microsoft Copilot ships a single, closed AI experience that many privacy-conscio
 
 ## One-time setup
 
-1. **Register an Azure AD app.** Takes ~3 minutes. See [docs/setup-admin.md](docs/setup-admin.md) for screenshots and the exact clicks. You end up with an **Application (client) ID** (a GUID).
+1. **Register an Azure AD app.** Takes ~3 minutes. See [docs/setup-admin.md](https://github.com/xdarkoy/outlook-mcp/blob/main/docs/setup-admin.md) for screenshots and the exact clicks. You end up with an **Application (client) ID** (a GUID).
 
 2. **One-time login:**
    ```bash
@@ -141,4 +141,4 @@ Tests: 40+ unit tests covering path safety (RLO visual attacks, zero-width chars
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+MIT. See [LICENSE](https://github.com/xdarkoy/outlook-mcp/blob/main/LICENSE).
