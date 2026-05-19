@@ -53,19 +53,28 @@ export const listEmailsTool: ToolDef<typeof ListEmailsInput> = {
     const folder = args.folder ?? "inbox";
     const limit = args.limit ?? 25;
     const filter = buildFilter(args);
-    // Graph's "inconsistent $orderby" rule: combining $filter on one property
-    // with $orderby on another triggers a 400 on some endpoints. The fix is
-    // to drop $orderby when we have a sender filter and sort client-side.
-    const useServerOrderBy = !args.from;
 
     try {
+      // Earlier versions dropped server-side $orderby when a sender filter
+      // was set, then sorted client-side — but that's WRONG for paginated
+      // requests: the server returns an arbitrary `top` matches, and
+      // sorting those locally gives you neither the newest matches nor a
+      // deterministic page. Graph 2026 supports orderby+filter on
+      // receivedDateTime + from together; we now always sort server-side.
+      // If a tenant ever rejects this combo, the 400 surfaces via
+      // explainGraphError as a clear message rather than silently lying.
       let req = graph()
         // The SDK URL-encodes path segments itself; passing the folder name
-        // raw avoids double-encoding. Only well-known folder names (inbox,
-        // drafts, sentitems, deleteditems, junkemail, archive) are supported
-        // here — custom subfolders need an ID lookup, which is a v0.2 item.
+        // raw avoids double-encoding. Well-known names (inbox, drafts,
+        // sentitems, deleteditems, junkemail, archive, outbox,
+        // conversationhistory) resolve directly. For custom folders pass
+        // an ID from list_folders.
         .api(`/me/mailFolders/${folder}/messages`)
-        .top(limit)
+        // Fetch one extra row so we can set `truncated` without an
+        // expensive $count query — if Graph returns more than `limit`,
+        // there's at least one more page available.
+        .top(limit + 1)
+        .orderby("receivedDateTime desc")
         .select([
           "id",
           "subject",
@@ -75,20 +84,12 @@ export const listEmailsTool: ToolDef<typeof ListEmailsInput> = {
           "hasAttachments",
           "bodyPreview",
         ]);
-      if (useServerOrderBy) req = req.orderby("receivedDateTime desc");
       if (filter) req = req.filter(filter);
 
       const res = await withAuthRetry(() => req.get());
-      const items: GraphMessageSummary[] = res?.value ?? [];
-
-      // Client-side sort when we couldn't ask the server.
-      if (!useServerOrderBy) {
-        items.sort((a, b) => {
-          const ta = a.receivedDateTime ? Date.parse(a.receivedDateTime) : 0;
-          const tb = b.receivedDateTime ? Date.parse(b.receivedDateTime) : 0;
-          return tb - ta;
-        });
-      }
+      const raw: GraphMessageSummary[] = res?.value ?? [];
+      const truncated = raw.length > limit;
+      const items = truncated ? raw.slice(0, limit) : raw;
 
       const summary = items.map((m) => ({
         id: m.id,
@@ -101,7 +102,14 @@ export const listEmailsTool: ToolDef<typeof ListEmailsInput> = {
         preview: (m.bodyPreview ?? "").slice(0, 240),
       }));
 
-      return ok({ folder, count: summary.length, messages: summary });
+      return ok({
+        folder,
+        count: summary.length,
+        // truncated: there's at least one more match beyond what we
+        // returned. Hint the LLM to either raise `limit` or narrow filters.
+        truncated,
+        messages: summary,
+      });
     } catch (err) {
       const e = explainGraphError(err);
       return fail(e.message, e.hint);

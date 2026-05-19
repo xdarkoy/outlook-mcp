@@ -24,7 +24,10 @@ import { fail, ok, type ToolDef } from "./types.js";
  *
  * Tool surface stays identical — callers pass the same query string and
  * get the same shape of results back. Account detection happens via the
- * JWT `tid` claim on the access token, cached per process.
+ * MSAL-cached account's `tenantId` (NOT a JWT claim — MSA-issued Graph
+ * access tokens are opaque, not JWTs, so decoding `tid` would fail for
+ * exactly the case we need to detect). The classifier is in auth/accountType.ts
+ * and is cached per process.
  */
 
 interface GraphSearchHit {
@@ -77,6 +80,35 @@ function summarizeFromSearchHit(h: GraphSearchHit): HitSummary {
     hasAttachments: !!h.resource?.hasAttachments,
     preview: (h.resource?.bodyPreview ?? "").slice(0, 240),
   };
+}
+
+/**
+ * Wrap a user query for Graph's `/me/messages?$search="…"` syntax.
+ *
+ * Microsoft documents Graph's $search as KQL-flavored. KQL uses backslash
+ * as the escape character: `\"` is a literal quote, `\\` is a literal
+ * backslash. That makes raw user backslashes a hazard:
+ *
+ *   Input  →  naive escape  →  Graph parses as
+ *   a\"b   →  "a\\"b"        →  "a\\" + b"   (string ends after \\)
+ *
+ * The pathological case is rare in real email-search queries (users don't
+ * type backslashes), but the cost of getting it wrong is a confusing 400
+ * from Graph. Pragmatic fix: strip backslashes entirely (replace with
+ * space). That loses zero realistic search expressivity and guarantees a
+ * well-formed quoted KQL string.
+ *
+ * Control characters are also stripped because the wire form is URL-
+ * encoded into a request line and stray control bytes either get rejected
+ * by the SDK or split the request.
+ *
+ * Exported for unit testing — the actual call site is the MSA branch below.
+ */
+export function escapeMsaSearchQuery(raw: string): string {
+  // eslint-disable-next-line no-control-regex
+  const stripped = raw.replace(/[\x00-\x1f\x7f\\]/g, " ");
+  const escaped = stripped.replace(/"/g, '\\"');
+  return `"${escaped}"`;
 }
 
 function summarizeFromMessage(m: GraphMessageSummary): HitSummary {
@@ -136,12 +168,15 @@ export const searchEmailsTool: ToolDef<typeof SearchEmailsInput> = {
           query: args.query,
           total,
           returned: hits.length,
+          // truncated = there are more results than we returned. Helps the
+          // LLM decide whether to ask the user for a narrower query.
+          truncated: total > hits.length,
           messages: hits.map(summarizeFromSearchHit),
         });
       }
 
       // MSA — use /me/messages?$search=. The $search value must be quoted.
-      const quoted = `"${args.query.replace(/"/g, '\\"')}"`;
+      const quoted = escapeMsaSearchQuery(args.query);
       const res = (await withAuthRetry(() =>
         graph()
           .api("/me/messages")
@@ -165,6 +200,9 @@ export const searchEmailsTool: ToolDef<typeof SearchEmailsInput> = {
         // MSA backend does not return a total count.
         total: null,
         returned: items.length,
+        // We can't know definitively without a total. Hint the LLM only when
+        // we hit the requested cap — that's the case where it likely matters.
+        truncated: items.length >= size,
         messages: items.map(summarizeFromMessage),
       });
     } catch (err) {

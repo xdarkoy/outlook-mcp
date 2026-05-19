@@ -15,10 +15,15 @@ import { ToolError } from "./errors.js";
  * this root and reject escapes.
  */
 
+// Microsoft's documented reserved device names. COM0 and LPT0 were added in
+// recent Windows builds (they were originally only treated as reserved when
+// referenced as devices, not files; modern Windows blocks them as filenames
+// too). Including them defensively — they're cheap to check and the cost of
+// missing one is an unbootable file on some systems.
 const WINDOWS_RESERVED = new Set([
   "con", "prn", "aux", "nul",
-  "com1", "com2", "com3", "com4", "com5", "com6", "com7", "com8", "com9",
-  "lpt1", "lpt2", "lpt3", "lpt4", "lpt5", "lpt6", "lpt7", "lpt8", "lpt9",
+  "com0", "com1", "com2", "com3", "com4", "com5", "com6", "com7", "com8", "com9",
+  "lpt0", "lpt1", "lpt2", "lpt3", "lpt4", "lpt5", "lpt6", "lpt7", "lpt8", "lpt9",
 ]);
 
 export function allowedDir(): string {

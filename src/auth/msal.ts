@@ -30,6 +30,13 @@ const AUTHORITY = `https://login.microsoftonline.com/${process.env.OUTLOOK_MCP_T
  * Scopes requested. Note the deliberate absence of `Mail.Send` — this MCP
  * server is physically incapable of sending mail. Only drafts.
  *
+ * Caveat on the trust narrative: Mail.ReadWrite is broader than "create
+ * drafts". It also permits `PATCH /me/messages/{id}` (mark read, move,
+ * categorize) and `DELETE /me/messages/{id}`. The structural guarantee
+ * therefore covers *sending* (no Mail.Send), not destruction. Any future
+ * tool that exposes deletion should land with a paired user-confirmation
+ * UX decision; the server itself does not gate it.
+ *
  * `offline_access` is required for refresh tokens, otherwise the user would
  * have to re-authenticate whenever the access token expires (~1h).
  */

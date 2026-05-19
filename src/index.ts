@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { createRequire } from "node:module";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import {
@@ -13,10 +14,24 @@ import { listEmailsTool } from "./tools/listEmails.js";
 import { readEmailTool } from "./tools/readEmail.js";
 import { searchEmailsTool } from "./tools/searchEmails.js";
 import { saveAttachmentTool } from "./tools/saveAttachment.js";
+import { markEmailTool } from "./tools/markEmail.js";
+import { moveEmailTool } from "./tools/moveEmail.js";
+import { listFoldersTool } from "./tools/listFolders.js";
 import { listCalendarEventsTool } from "./tools/listCalendarEvents.js";
 import { createEventTool } from "./tools/createEvent.js";
+import { updateEventTool } from "./tools/updateEvent.js";
+import { deleteEventTool } from "./tools/deleteEvent.js";
 import { createDraftTool } from "./tools/createDraft.js";
 import { toAny, type AnyToolDef } from "./tools/types.js";
+
+/**
+ * Read the package version from package.json so the MCP server's advertised
+ * version stays in lockstep with the package. createRequire works from both
+ * src/index.ts (under tsx) and dist/index.js (after build) because the
+ * relative path "../package.json" lands at the project root in both layouts.
+ */
+const require = createRequire(import.meta.url);
+const pkg = require("../package.json") as { version: string };
 
 /**
  * STDOUT is the MCP JSON-RPC channel. Anything written there that is not a
@@ -56,8 +71,13 @@ const tools: AnyToolDef[] = [
   toAny(readEmailTool),
   toAny(searchEmailsTool),
   toAny(saveAttachmentTool),
+  toAny(markEmailTool),
+  toAny(moveEmailTool),
+  toAny(listFoldersTool),
   toAny(listCalendarEventsTool),
   toAny(createEventTool),
+  toAny(updateEventTool),
+  toAny(deleteEventTool),
   toAny(createDraftTool),
 ];
 
@@ -80,7 +100,7 @@ const advertisedTools: AdvertisedTool[] = tools.map((t) => ({
 }));
 
 const server = new Server(
-  { name: "outlook-mcp", version: "0.1.0" },
+  { name: "outlook-mcp", version: pkg.version },
   { capabilities: { tools: {} } },
 );
 

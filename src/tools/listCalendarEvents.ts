@@ -47,11 +47,13 @@ export const listCalendarEventsTool: ToolDef<typeof ListCalendarEventsInput> = {
     // most tenants but fail on some. Normalize to the canonical 'Z' form.
     const toUtc = (iso: string) => new Date(iso).toISOString();
     try {
+      // Fetch one extra row so we can compute `truncated` without a
+      // separate $count call.
       const res = (await withAuthRetry(() => graph()
         .api("/me/calendarView")
         .query({ startDateTime: toUtc(args.from), endDateTime: toUtc(args.to) })
         .header("Prefer", 'outlook.timezone="UTC"')
-        .top(limit)
+        .top(limit + 1)
         .orderby("start/dateTime asc")
         .select([
           "id",
@@ -69,7 +71,9 @@ export const listCalendarEventsTool: ToolDef<typeof ListCalendarEventsInput> = {
         ])
         .get())) as { value?: GraphEvent[] };
 
-      const events = (res.value ?? []).map((e) => ({
+      const rawEvents = res.value ?? [];
+      const truncated = rawEvents.length > limit;
+      const events = (truncated ? rawEvents.slice(0, limit) : rawEvents).map((e) => ({
         id: e.id,
         subject: e.subject ?? "(no subject)",
         start: e.start?.dateTime ?? null,
@@ -91,6 +95,9 @@ export const listCalendarEventsTool: ToolDef<typeof ListCalendarEventsInput> = {
       return ok({
         window: { from: args.from, to: args.to, timezone: "UTC" },
         count: events.length,
+        // truncated: there are more events in the requested window than we
+        // returned. Hint the LLM to narrow the window or raise `limit`.
+        truncated,
         events,
       });
     } catch (err) {

@@ -116,6 +116,25 @@ export const saveAttachmentTool: ToolDef<typeof SaveAttachmentInput> = {
       const targetPath = await resolveWritePath(requestedName);
 
       const buf = Buffer.from(att.contentBytes, "base64");
+
+      // Node's base64 decoder silently drops invalid characters. If Graph
+      // ever returns malformed contentBytes (or if the field is corrupted in
+      // transit), the resulting Buffer is shorter than Graph's reported
+      // size and we'd happily write a truncated file claiming success.
+      // Reject the mismatch loudly instead.
+      const reportedSize = att.size;
+      if (
+        typeof reportedSize === "number" &&
+        Number.isFinite(reportedSize) &&
+        reportedSize > 0 &&
+        buf.byteLength !== reportedSize
+      ) {
+        return fail(
+          `Decoded attachment size (${buf.byteLength} bytes) does not match Graph's reported size (${reportedSize} bytes).`,
+          "Likely a malformed base64 payload from Graph. Re-run read_email to refresh attachment metadata, then retry. If this persists, the source message attachment may be corrupt.",
+        );
+      }
+
       const finalPath = await writeUnique(targetPath, buf);
 
       return ok({

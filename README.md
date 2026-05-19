@@ -20,7 +20,7 @@ Microsoft Copilot ships a single, closed AI experience that many privacy-conscio
 
 ## Status
 
-**v0.1.0 — ready for personal use.** MVP scope complete; all 7 tools implemented and live-verified against a real Outlook.com mailbox.
+**v0.2.0 — twelve tools, hardened core.** MVP scope complete plus a second round of bug fixes, hardening, and five new tools (mark/move/folders/update-event/delete-event).
 
 | Tool                   | Live-tested (MSA) | Code-verified (AAD) |
 |------------------------|-------------------|---------------------|
@@ -28,11 +28,16 @@ Microsoft Copilot ships a single, closed AI experience that many privacy-conscio
 | `read_email`           | ✅                 | ✅                   |
 | `search_emails`        | ✅                 | ⚠️ not live-tested   |
 | `save_attachment`      | ✅                 | ✅                   |
+| `mark_email_read`      | ⚠️ code-verified   | ⚠️ code-verified     |
+| `move_email`           | ⚠️ code-verified   | ⚠️ code-verified     |
+| `list_folders`         | ⚠️ code-verified   | ⚠️ code-verified     |
 | `list_calendar_events` | ✅                 | ✅                   |
 | `create_event`         | ✅                 | ✅                   |
+| `update_event`         | ⚠️ code-verified   | ⚠️ code-verified     |
+| `delete_event`         | ⚠️ code-verified   | ⚠️ code-verified     |
 | `create_draft`         | ✅                 | ✅                   |
 
-"Code-verified" means the AAD path exists in the source and is exercised by the dual-backend routing, but a live end-to-end test against a work/school tenant is pending. If you hit issues on AAD, please open an issue with the exact error — we fix it fast.
+"Code-verified" means the path exists in the source and is exercised by the type system, schema tests, and the MCP smoke test, but a live end-to-end Graph call against a real mailbox is pending. If you hit issues, please open an issue with the exact error — we fix it fast.
 
 ## One-time setup
 
@@ -99,31 +104,43 @@ outlook-mcp-local help    # Show this help
 ## Security model
 
 - **No send capability.** The OAuth token has no `Mail.Send` scope. Even if the LLM asks, the server cannot send. Draft-first, always.
+- **`Mail.ReadWrite` caveat.** The granted scope covers read/draft/mark/move and *also* deletion. This server exposes mark/move only — `move_email` to `deleteditems` is the supported "delete" path (recoverable from trash). There is no `delete_email` tool.
 - **Token cache on disk.** `~/.outlook-mcp/cache.json` is written with mode `0600` on POSIX and user-profile ACL on Windows. Cache directory path is realpath-resolved to defeat symlink escapes.
-- **Attachment writes are jailed.** `save_attachment` never writes outside `OUTLOOK_MCP_ALLOWED_DIR`. Path traversal, Windows-reserved names, NTFS alternate data streams, and Unicode RTL/LTR override attacks (e.g. `invoice‮fdp.exe`) are all blocked. O_EXCL atomic writes prevent concurrent-save races; filename collisions append `(2)`, `(3)`, …
+- **Attachment writes are jailed.** `save_attachment` never writes outside `OUTLOOK_MCP_ALLOWED_DIR`. Path traversal, Windows-reserved names (incl. `COM0`/`LPT0`), NTFS alternate data streams, and Unicode RTL/LTR override attacks (e.g. `invoice‮fdp.exe`) are all blocked. O_EXCL atomic writes prevent concurrent-save races; filename collisions append `(2)`, `(3)`, … Decoded byte count is verified against Graph's reported `size` before writing — malformed base64 cannot produce a silently truncated file.
 - **Mail content never leaves your machine except to Graph and your chosen LLM.** No telemetry. No license check. No phone-home.
-- **Deliberate exclusions.** No `Mail.Delete`. No `User.ReadWrite.All`. No app-only permissions. The server always acts as the signed-in user, never as a daemon with broader reach.
+- **Deliberate exclusions.** No `Mail.Send`. No `User.ReadWrite.All`. No app-only permissions. The server always acts as the signed-in user, never as a daemon with broader reach.
 
 ## Tool caveats worth knowing
 
-- **`search_emails`** returns results ranked by relevance, not date. On personal (MSA) accounts the `received:this-week` filter is silently ignored by Microsoft's backend — use `list_emails` with `since`/`until` if you need strict date filtering. The personal backend also has no total-count.
+- **`search_emails`** returns results ranked by relevance, not date. On personal (MSA) accounts the `received:this-week` filter is silently ignored by Microsoft's backend — use `list_emails` with `since`/`until` if you need strict date filtering. The personal backend also has no total-count. List/search responses include a `truncated` boolean so the LLM can tell when to widen `limit` or narrow filters.
 - **`list_calendar_events`** caps at `limit` (default 50, max 100) and does not follow `@odata.nextLink`. For busy calendars, narrow the window.
-- **`create_event`** automatically sends meeting invitations if `attendees` is set. That is usually the desired behavior but worth knowing — if the LLM invents an attendee, a real invite goes out.
+- **`create_event`** automatically sends meeting invitations if `attendees` is set. That is usually the desired behavior but worth knowing — if the LLM invents an attendee, a real invite goes out. When the same address is passed twice with different types, the higher-priority type wins (`required > optional > resource`) rather than last-write.
+- **`update_event`** is a sparse merge — only the fields you pass are changed. EXCEPTION: if `attendees` is provided, the entire attendee list is *replaced*. Graph emails update notifications to affected attendees automatically; there is no silent-update mode.
+- **`delete_event` is destructive.** For a meeting with attendees, Graph sends a cancellation notice to everyone before removing the event. There is no silent-delete mode at the API level. Make the implication explicit to the user before invoking.
+- **`move_email`** issues a NEW Graph message ID — the original id becomes invalid after the move. To "delete" a message in the Outlook sense, move it to `deleteditems` (recoverable from trash).
 - **`create_draft`** never sends. If you pass `body` on a reply, it REPLACES Graph's quoted-original body — the caller fully controls the outgoing text.
 
 ## Roadmap
 
-v0.2 candidates:
-- Streaming download for very large attachments via `/$value`
-- Custom mailbox subfolder resolution in `list_emails`
-- Contacts read/search
-- Tasks / To-Do
-- OneDrive file search + fetch
+Shipped in v0.2:
+- `mark_email_read`, `move_email`, `list_folders` — completes the mail-management surface.
+- `update_event`, `delete_event` — completes the calendar CRUD surface.
+- Custom subfolder resolution via `list_folders` (returned IDs work in `list_emails` / `move_email`).
+- Truncation hints on every list/search response.
+- Hardened auth retry (in-flight refresh dedup so parallel 401s don't trigger duplicate refresh-token rotations).
+
+v0.3 candidates:
+- Live-test the new tools against MSA + AAD tenants.
+- Streaming download for very large attachments via `/$value`.
+- Mocked-Graph handler tests for the five new tools.
+- Contacts read/search.
+- Tasks / To-Do.
+- OneDrive file search + fetch.
 
 Pro-feature candidates:
-- Teams chat search
-- SharePoint document RAG hooks
-- Docker image for enterprise deployments
+- Teams chat search.
+- SharePoint document RAG hooks.
+- Docker image for enterprise deployments.
 
 Issues and PRs welcome.
 
@@ -137,7 +154,7 @@ npm run build
 npm test
 ```
 
-Tests: 40+ unit tests covering path safety (RLO visual attacks, zero-width chars, Windows-reserved names), create_event timezone logic, account-type detection, and an MCP stdio smoke test. Real Microsoft Graph calls are exercised via `scripts/live-call.mjs` for manual acceptance testing.
+Tests: 85+ unit tests across seven files — path safety (RLO visual attacks, zero-width chars, Windows-reserved names incl. COM0/LPT0), create_event timezone logic, account-type detection, MSA search-query escaping (incl. KQL backslash hazard), attendee dedup tiebreaker, schema-level refinement (separator rejection on `targetFilename`, range limits, required fields), plus an MCP stdio smoke test that verifies all 12 tools register. Real Microsoft Graph calls are exercised via `scripts/live-call.mjs` for manual acceptance testing.
 
 ## License
 

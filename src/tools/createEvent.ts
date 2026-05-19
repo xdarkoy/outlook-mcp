@@ -1,7 +1,44 @@
-import { CreateEventInput } from "../schemas.js";
+import { CreateEventInput, type AttendeeInput } from "../schemas.js";
 import { graph, withAuthRetry } from "../graph/client.js";
 import { explainGraphError, ToolError } from "../util/errors.js";
 import { fail, ok, type ToolDef } from "./types.js";
+
+/**
+ * Attendee type priority for case-insensitive dedup.
+ *
+ * When the same address appears multiple times in a single call, we keep
+ * the highest-priority type rather than letting last-write-win silently
+ * downgrade a 'required' attendee to 'optional'. This matters because the
+ * LLM may construct the attendee list by merging multiple sources (e.g.
+ * project leads + cc'd observers) and the safer default on conflict is
+ * stricter, not laxer.
+ *
+ * Order: required > optional > resource.
+ *
+ * Exported so update_event can reuse the exact same normalization.
+ */
+const ATTENDEE_PRIORITY = { required: 2, optional: 1, resource: 0 } as const;
+
+export function normalizeAttendees(
+  attendees: AttendeeInput[],
+): Array<{ emailAddress: { address: string }; type: string }> {
+  const seen = new Map<string, { address: string; type: keyof typeof ATTENDEE_PRIORITY }>();
+  for (const a of attendees) {
+    const entry =
+      typeof a === "string"
+        ? { address: a, type: "required" as const }
+        : { address: a.address, type: (a.type ?? "required") as keyof typeof ATTENDEE_PRIORITY };
+    const key = entry.address.toLowerCase();
+    const prev = seen.get(key);
+    if (!prev || ATTENDEE_PRIORITY[entry.type] > ATTENDEE_PRIORITY[prev.type]) {
+      seen.set(key, entry);
+    }
+  }
+  return Array.from(seen.values()).map((e) => ({
+    emailAddress: { address: e.address },
+    type: e.type,
+  }));
+}
 
 /**
  * create_event: add a calendar event.
@@ -101,20 +138,7 @@ export const createEventTool: ToolDef<typeof CreateEventInput> = {
       payload.location = { displayName: args.location };
     }
     if (args.attendees && args.attendees.length > 0) {
-      // Normalize each entry to {address, type}, then dedupe by address
-      // (case-insensitive) — Graph otherwise happily sends two invites.
-      const seen = new Map<string, { address: string; type: string }>();
-      for (const a of args.attendees) {
-        const entry =
-          typeof a === "string"
-            ? { address: a, type: "required" as const }
-            : { address: a.address, type: (a.type ?? "required") as string };
-        seen.set(entry.address.toLowerCase(), entry);
-      }
-      payload.attendees = Array.from(seen.values()).map((e) => ({
-        emailAddress: { address: e.address },
-        type: e.type,
-      }));
+      payload.attendees = normalizeAttendees(args.attendees);
     }
 
     try {

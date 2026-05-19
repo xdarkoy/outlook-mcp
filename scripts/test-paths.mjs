@@ -55,6 +55,10 @@ t("rejects 'CON '", () => assert.throws(() => sanitizeFilename("CON ")));
 t("rejects 'CON.'", () => assert.throws(() => sanitizeFilename("CON.")));
 t("rejects 'NUL'", () => assert.throws(() => sanitizeFilename("NUL")));
 t("rejects 'lpt1.log'", () => assert.throws(() => sanitizeFilename("lpt1.log")));
+t("rejects 'COM0'", () => assert.throws(() => sanitizeFilename("COM0")));
+t("rejects 'com0.txt'", () => assert.throws(() => sanitizeFilename("com0.txt")));
+t("rejects 'LPT0'", () => assert.throws(() => sanitizeFilename("LPT0")));
+t("rejects 'lpt0.log'", () => assert.throws(() => sanitizeFilename("lpt0.log")));
 t("allows innocent leading dot", () => assert.equal(sanitizeFilename(".bashrc"), ".bashrc"));
 t("strips pipe/question/asterisk", () =>
   assert.equal(sanitizeFilename("a|b?c*.txt"), "a_b_c_.txt"));
