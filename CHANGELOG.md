@@ -4,6 +4,21 @@ All notable changes to this project are documented in this file. The
 format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1] - 2026-05-19
+
+Bug-fix release. All four issues were external-reviewer findings on v0.2.0; no API surface change beyond the response-shape rename in `update_event`.
+
+### Fixed
+
+- **`create_event` / `update_event` schema vs. handler mismatch (HIGH).** The Zod schema accepted only offset-bearing datetimes (`datetime({ offset: true })`), but the handler explicitly rejected those when `timeZone` was a non-UTC IANA zone — making the documented `naive datetime + Europe/Berlin` path unreachable through the schema. Schema now uses `datetime({ offset: true, local: true })` to accept both forms; the handler's normalization rules (the source of truth for the offset/tz matrix) are unchanged.
+- **`list_emails` opaque folder IDs were mis-parsed (HIGH).** The Graph SDK does NOT percent-encode path segments. Opaque folder IDs returned by `list_folders` can contain `/`, `+`, or `=` — those landed in the URL as path delimiters, hitting the wrong resource. `list_emails` now `encodeURIComponent`s the folder segment, matching what `list_folders` already does for `parentFolderId`. Well-known names ("inbox", "sentitems", …) are ASCII-only, so encoding them is a no-op.
+- **`list_emails` InefficientFilter rejection (MEDIUM).** The v0.2.0 commit removed the workaround that dropped `$orderby` when a `from` filter was present. That removal was correct for sorting integrity, but on stricter tenants Graph rejects `startsWith(from/…, …)` + `$orderby receivedDateTime desc` as InefficientFilter when the filter doesn't also touch `receivedDateTime`. `buildFilter` now injects a permissive `receivedDateTime ge 1900-01-01T00:00:00Z` baseline when `from` is set without a user-supplied `since`. Caller-supplied `since` already satisfies the requirement and the baseline is skipped.
+- **`update_event` notification field was misleading (LOW).** Response previously returned `notificationsSent: <attendees-were-replaced>`. That gave a false negative whenever a subject/time/location change on a meeting with existing attendees was made WITHOUT touching the attendees field — Graph sends notifications for those changes too. Field renamed to `attendeesReplaced` (which is what we actually know) plus a `notificationsNote` explaining Graph's auto-notify behavior. No more silent-update illusion.
+
+### Tests
+
+- 100 cases (up from 85). +4 datetime cases for `CreateEventInput` and `UpdateEventInput` (schema-level naive vs. offset acceptance). +10 cases in a new `test-build-filter.mjs` covering the InefficientFilter baseline matrix, OData quote escaping, clause order stability.
+
 ## [0.2.0] - 2026-05-19
 
 ### Added — new tools

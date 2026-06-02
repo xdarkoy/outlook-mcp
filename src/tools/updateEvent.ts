@@ -97,6 +97,17 @@ export const updateEventTool: ToolDef<typeof UpdateEventInput> = {
         graph().api(`/me/events/${eid}`).patch(payload),
       )) as GraphEventUpdateResponse;
 
+      // Notification semantics: Graph emails attendees on ANY user-visible
+      // change to a meeting (subject, start/end, location, body, attendee
+      // list) — not only when the attendees field itself is touched.
+      // Whether notifications were actually sent depends on whether the
+      // event has attendees, which we'd need an extra GET to know. We
+      // therefore report what we ACTUALLY know — whether we replaced the
+      // attendee list — and a textual note about Graph's auto-notify
+      // behavior. The previous shape (`notificationsSent: hadAttendees`)
+      // could falsely tell a caller "nothing was sent" after a subject
+      // change on a meeting that did dispatch cancellation notices.
+      const attendeesReplaced = args.attendees !== undefined;
       return ok({
         updated: true,
         id: updated.id ?? args.eventId,
@@ -105,7 +116,9 @@ export const updateEventTool: ToolDef<typeof UpdateEventInput> = {
         end: updated.end?.dateTime ?? null,
         timeZone: tz,
         webLink: updated.webLink ?? null,
-        notificationsSent: args.attendees !== undefined,
+        attendeesReplaced,
+        notificationsNote:
+          "Graph automatically emails attendees about subject/time/location/body/attendee changes on meetings. There is no silent-update mode. If you need to suppress notifications, recreate the event after deleting the old one — but that also fires a cancellation.",
       });
     } catch (err) {
       const e = explainGraphError(err);

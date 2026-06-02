@@ -21,7 +21,24 @@ interface GraphMessageSummary {
   bodyPreview?: string;
 }
 
-function buildFilter(args: {
+/**
+ * Build the Graph $filter clause. Exported for unit testing — the InefficientFilter
+ * workaround below is subtle enough to warrant explicit coverage.
+ *
+ * Graph rejects certain `$filter` + `$orderby` combinations as InefficientFilter
+ * on Outlook mailbox endpoints — most relevantly `startsWith(from/emailAddress/
+ * address, ...)` combined with `$orderby receivedDateTime desc`. Microsoft's
+ * documented workaround is to include the orderby property in the filter too.
+ *
+ * So whenever we filter on `from`, we ALSO include a `receivedDateTime ge ...`
+ * clause. If the caller already passed `since`, we keep their bound; otherwise
+ * we inject a far-past sentinel (1900-01-01) that matches every real message.
+ * Cost: one extra harmless comparison. Benefit: server-side ordering survives
+ * on strict tenants without changing tool semantics.
+ */
+const RECEIVED_BASELINE = "1900-01-01T00:00:00Z";
+
+export function buildFilter(args: {
   from?: string;
   since?: string;
   until?: string;
@@ -37,11 +54,18 @@ function buildFilter(args: {
     const esc = args.from.replace(/'/g, "''");
     parts.push(`startsWith(from/emailAddress/address, '${esc}')`);
   }
+  // Include a receivedDateTime ge clause whenever we're sorting by it AND
+  // have at least one other filter — this is the InefficientFilter workaround.
+  // If `since` is provided it covers the requirement; otherwise inject a
+  // permissive baseline so the orderby is accepted.
+  const needsBaseline = !!args.from && !args.since;
   if (args.since) parts.push(`receivedDateTime ge ${args.since}`);
+  else if (needsBaseline) parts.push(`receivedDateTime ge ${RECEIVED_BASELINE}`);
   if (args.until) parts.push(`receivedDateTime lt ${args.until}`);
   if (args.unreadOnly) parts.push("isRead eq false");
   return parts.length ? parts.join(" and ") : undefined;
 }
+
 
 export const listEmailsTool: ToolDef<typeof ListEmailsInput> = {
   name: "list_emails",
@@ -64,12 +88,13 @@ export const listEmailsTool: ToolDef<typeof ListEmailsInput> = {
       // If a tenant ever rejects this combo, the 400 surfaces via
       // explainGraphError as a clear message rather than silently lying.
       let req = graph()
-        // The SDK URL-encodes path segments itself; passing the folder name
-        // raw avoids double-encoding. Well-known names (inbox, drafts,
-        // sentitems, deleteditems, junkemail, archive, outbox,
-        // conversationhistory) resolve directly. For custom folders pass
-        // an ID from list_folders.
-        .api(`/me/mailFolders/${folder}/messages`)
+        // The Graph SDK does NOT percent-encode path segments — opaque
+        // folder IDs from list_folders can contain `/`, `+`, `=` and would
+        // be mis-parsed as path components without encoding. Well-known
+        // names ("inbox", "sentitems", …) are ASCII-only, so encoding them
+        // is a no-op. Always encoding is the safe, simpler invariant —
+        // matches list_folders.ts which encodes parentFolderId the same way.
+        .api(`/me/mailFolders/${encodeURIComponent(folder)}/messages`)
         // Fetch one extra row so we can set `truncated` without an
         // expensive $count query — if Graph returns more than `limit`,
         // there's at least one more page available.

@@ -20,7 +20,7 @@ Microsoft Copilot ships a single, closed AI experience that many privacy-conscio
 
 ## Status
 
-**v0.2.0 — twelve tools, hardened core.** MVP scope complete plus a second round of bug fixes, hardening, and five new tools (mark/move/folders/update-event/delete-event).
+**v0.2.1 — twelve tools, hardened core.** MVP scope complete plus a third round of fixes addressing schema/handler mismatches on non-UTC times, opaque-folder-ID encoding in `list_emails`, and InefficientFilter robustness. See [CHANGELOG.md](https://github.com/xdarkoy/outlook-mcp/blob/main/CHANGELOG.md) for the full history.
 
 | Tool                   | Live-tested (MSA) | Code-verified (AAD) |
 |------------------------|-------------------|---------------------|
@@ -154,7 +154,7 @@ npm run build
 npm test
 ```
 
-Tests: 85+ unit tests across seven files — path safety (RLO visual attacks, zero-width chars, Windows-reserved names incl. COM0/LPT0), create_event timezone logic, account-type detection, MSA search-query escaping (incl. KQL backslash hazard), attendee dedup tiebreaker, schema-level refinement (separator rejection on `targetFilename`, range limits, required fields), plus an MCP stdio smoke test that verifies all 12 tools register. Real Microsoft Graph calls are exercised via `scripts/live-call.mjs` for manual acceptance testing.
+Tests: 100+ unit tests across eight files — path safety (RLO visual attacks, zero-width chars, Windows-reserved names incl. COM0/LPT0), create_event timezone logic, account-type detection, MSA search-query escaping (incl. KQL backslash hazard), attendee dedup tiebreaker, schema-level refinement (separator rejection on `targetFilename`, range limits, required fields, naive vs. offset datetime acceptance), Graph `$filter` builder (incl. InefficientFilter baseline workaround, OData quote escaping), plus an MCP stdio smoke test that verifies all 12 tools register. Real Microsoft Graph calls are exercised via `scripts/live-call.mjs` for manual acceptance testing.
 
 ## License
 

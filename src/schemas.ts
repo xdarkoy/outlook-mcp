@@ -187,12 +187,23 @@ export type AttendeeInput = z.infer<typeof AttendeeInput>;
 
 export const CreateEventInput = z.object({
   subject: z.string().min(1).describe("Event subject / title."),
-  start: z.string().datetime({ offset: true }).describe("Start time in ISO-8601."),
-  end: z.string().datetime({ offset: true }).describe("End time in ISO-8601."),
+  // `local: true` permits naive (no offset, no Z) ISO strings — the documented
+  // way to pass times in a non-UTC IANA zone. `offset: true` keeps Z and
+  // +HH:MM suffixes valid for UTC use. Without `local`, naive forms get
+  // rejected by Zod before the handler ever sees them, which makes the
+  // "naive + Europe/Berlin" path advertised by timeZone unusable.
+  start: z
+    .string()
+    .datetime({ offset: true, local: true })
+    .describe("Start time in ISO-8601. Naive (no offset) is allowed and uses timeZone; offset suffix (Z or +HH:MM) is only allowed when timeZone is UTC (or omitted)."),
+  end: z
+    .string()
+    .datetime({ offset: true, local: true })
+    .describe("End time in ISO-8601. Same rules as start."),
   timeZone: z
     .string()
     .optional()
-    .describe("IANA time zone (e.g. 'Europe/Berlin'). Defaults to 'UTC' if omitted."),
+    .describe("IANA time zone (e.g. 'Europe/Berlin'). Defaults to 'UTC' if omitted. For non-UTC zones, pass naive datetimes (no Z/offset suffix)."),
   attendees: z
     .array(AttendeeInput)
     .optional()
@@ -220,8 +231,16 @@ export type CreateEventInput = z.infer<typeof CreateEventInput>;
 export const UpdateEventInput = z.object({
   eventId: z.string().min(1).describe("The Graph event ID to update."),
   subject: z.string().min(1).optional().describe("New event subject / title."),
-  start: z.string().datetime({ offset: true }).optional().describe("New start time in ISO-8601."),
-  end: z.string().datetime({ offset: true }).optional().describe("New end time in ISO-8601."),
+  start: z
+    .string()
+    .datetime({ offset: true, local: true })
+    .optional()
+    .describe("New start time in ISO-8601. Naive (no offset) is allowed and uses timeZone; offset suffix is only allowed when timeZone is UTC."),
+  end: z
+    .string()
+    .datetime({ offset: true, local: true })
+    .optional()
+    .describe("New end time in ISO-8601. Same rules as start."),
   timeZone: z
     .string()
     .optional()

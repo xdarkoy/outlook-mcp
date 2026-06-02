@@ -7,6 +7,7 @@ import {
   MarkEmailInput,
   MoveEmailInput,
   ListFoldersInput,
+  CreateEventInput,
   UpdateEventInput,
   DeleteEventInput,
 } from "../dist/schemas.js";
@@ -140,6 +141,46 @@ t("limit > 200 rejected", () => {
   assert.equal(r.success, false);
 });
 
+console.log("\nCreateEventInput datetime handling:");
+
+t("naive datetime + Europe/Berlin accepted (was rejected pre-fix)", () => {
+  const r = CreateEventInput.safeParse({
+    subject: "Lunch",
+    start: "2026-05-01T12:00:00",
+    end: "2026-05-01T13:00:00",
+    timeZone: "Europe/Berlin",
+  });
+  assert.equal(r.success, true);
+});
+
+t("offset datetime (Z) + UTC accepted", () => {
+  const r = CreateEventInput.safeParse({
+    subject: "Sync",
+    start: "2026-05-01T10:00:00Z",
+    end: "2026-05-01T10:30:00Z",
+  });
+  assert.equal(r.success, true);
+});
+
+t("offset datetime (+02:00) + UTC accepted at schema (handler normalizes)", () => {
+  const r = CreateEventInput.safeParse({
+    subject: "Sync",
+    start: "2026-05-01T10:00:00+02:00",
+    end: "2026-05-01T10:30:00+02:00",
+    timeZone: "UTC",
+  });
+  assert.equal(r.success, true);
+});
+
+t("malformed datetime rejected", () => {
+  const r = CreateEventInput.safeParse({
+    subject: "x",
+    start: "not-a-date",
+    end: "2026-05-01T10:30:00Z",
+  });
+  assert.equal(r.success, false);
+});
+
 console.log("\nUpdateEventInput:");
 
 t("eventId-only is valid (handler will reject empty payload)", () => {
@@ -159,6 +200,15 @@ t("invalid datetime rejected", () => {
     start: "not-a-date",
   });
   assert.equal(r.success, false);
+});
+
+t("UpdateEventInput naive datetime accepted (parity with CreateEventInput)", () => {
+  const r = UpdateEventInput.safeParse({
+    eventId: "e1",
+    start: "2026-05-01T12:00:00",
+    timeZone: "Europe/Berlin",
+  });
+  assert.equal(r.success, true);
 });
 
 t("attendees: empty array valid (means: remove all attendees)", () => {
