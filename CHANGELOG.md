@@ -4,6 +4,19 @@ All notable changes to this project are documented in this file. The
 format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.2] - 2026-07-02
+
+Maintenance release focused on preserving the mail trust boundary during future agent-driven work.
+
+### Added
+
+- Added `AGENTS.md` with maintainer guardrails for future agents. Changes to OAuth scopes, outbound mail behavior, attachment persistence, or calendar side effects should search prior session history when available and keep the relevant trust-boundary decision visible.
+- Added `test-mail-trust-boundary.mjs`, a regression test that verifies `Mail.Send` is absent, `create_draft` is still advertised as draft-only, and no advertised MCP tool is named like a send action.
+
+### Fixed
+
+- Synchronized `package-lock.json` root metadata with the package version. The lockfile still advertised `0.1.0` even after the package had moved to `0.2.x`.
+
 ## [0.2.1] - 2026-05-19
 
 Bug-fix release. All four issues were external-reviewer findings on v0.2.0; no API surface change beyond the response-shape rename in `update_event`.
