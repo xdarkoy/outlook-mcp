@@ -7,6 +7,7 @@ import {
   MarkEmailInput,
   MoveEmailInput,
   ListFoldersInput,
+  ListCalendarEventsInput,
   CreateEventInput,
   UpdateEventInput,
   DeleteEventInput,
@@ -138,6 +139,29 @@ t("parentFolderId accepted", () => {
 
 t("limit > 200 rejected", () => {
   const r = ListFoldersInput.safeParse({ limit: 201 });
+  assert.equal(r.success, false);
+});
+
+console.log("\nListCalendarEventsInput datetime handling:");
+
+t("offset datetime (Z) accepted", () => {
+  const r = ListCalendarEventsInput.safeParse({
+    from: "2026-05-01T00:00:00Z",
+    to: "2026-05-02T00:00:00Z",
+  });
+  assert.equal(r.success, true);
+});
+
+t("naive datetime (no offset) REJECTED — no timeZone param to disambiguate it", () => {
+  // Unlike create_event/update_event, this tool has no timeZone field, so a
+  // naive datetime would be ambiguous. The schema intentionally requires
+  // offset:true WITHOUT local:true — this must stay rejected. The tool
+  // description was previously wrong about this (fixed in listCalendarEvents.ts);
+  // this test guards against re-introducing the mismatch by loosening the schema.
+  const r = ListCalendarEventsInput.safeParse({
+    from: "2026-05-01T00:00:00",
+    to: "2026-05-02T00:00:00",
+  });
   assert.equal(r.success, false);
 });
 

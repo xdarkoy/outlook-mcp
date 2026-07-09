@@ -1,6 +1,6 @@
 {
   "name": "outlook-mcp-local",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Local-first MCP server exposing Outlook / Microsoft 365 as tools for any MCP-capable LLM client. The Anti-Copilot for the BYOM market.",
   "keywords": [
     "mcp",

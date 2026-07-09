@@ -20,7 +20,7 @@ Microsoft Copilot ships a single, closed AI experience that many privacy-conscio
 
 ## Status
 
-**v0.2.1 — twelve tools, hardened core.** MVP scope complete plus a third round of fixes addressing schema/handler mismatches on non-UTC times, opaque-folder-ID encoding in `list_emails`, and InefficientFilter robustness. See [CHANGELOG.md](https://github.com/xdarkoy/outlook-mcp/blob/main/CHANGELOG.md) for the full history.
+**v0.2.3 — twelve tools, hardened core.** MVP scope complete, plus fixes addressing schema/handler mismatches on non-UTC times, opaque-folder-ID encoding in `list_emails`, InefficientFilter robustness, and a doc/schema mismatch in `list_calendar_events`. `AGENTS.md` documents this repo's trust-boundary guardrails for future agent-driven changes. See [CHANGELOG.md](https://github.com/xdarkoy/outlook-mcp/blob/main/CHANGELOG.md) for the full history.
 
 | Tool                   | Live-tested (MSA) | Code-verified (AAD) |
 |------------------------|-------------------|---------------------|

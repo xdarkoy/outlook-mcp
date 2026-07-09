@@ -4,6 +4,16 @@ All notable changes to this project are documented in this file. The
 format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.3] - 2026-07-02
+
+### Fixed
+
+- **`list_calendar_events` description promised something the schema doesn't allow.** The tool description said "pass ISO-8601 with or without offset," but `ListCalendarEventsInput.from`/`.to` use `datetime({ offset: true })` without `local: true`, so naive (offset-less) datetimes are rejected by Zod before the handler ever sees them. Unlike `create_event`/`update_event`, this tool has no `timeZone` parameter — a naive datetime here would be genuinely ambiguous, and the handler's `new Date(iso).toISOString()` conversion would silently misinterpret one using the server process's local timezone rather than UTC. Fixed the description to state the offset requirement plainly, rather than widening the schema (which would reintroduce that exact silent-misinterpretation risk). No behavior change — the schema already enforced the correct rule; only the documentation was wrong.
+
+### Tests
+
+- Added `ListCalendarEventsInput` schema cases (accept offset, reject naive) as a regression guard against loosening this schema by mistake in the future.
+
 ## [0.2.2] - 2026-07-02
 
 Maintenance release focused on preserving the mail trust boundary during future agent-driven work.

@@ -37,9 +37,10 @@ export const listCalendarEventsTool: ToolDef<typeof ListCalendarEventsInput> = {
   description:
     "List calendar events in a time window. Recurring events are expanded into individual occurrences. " +
     "All returned times are in UTC — convert for display if needed. Use create_event to add a new event. " +
-    "The window bounds are normalized to UTC before the request; pass ISO-8601 with or without offset. " +
-    "Result is capped by `limit` (default 50, max 100); no pagination is followed, so for very busy " +
-    "calendars, narrow the window if you hit the cap.",
+    "`from`/`to` MUST include an explicit offset (e.g. trailing 'Z' or '+02:00') — unlike create_event, " +
+    "this tool has no `timeZone` parameter, so a naive (offset-less) datetime would be ambiguous and is " +
+    "rejected. Result is capped by `limit` (default 50, max 100); no pagination is followed, so for very " +
+    "busy calendars, narrow the window if you hit the cap.",
   schema: ListCalendarEventsInput,
   async handler(args) {
     const limit = args.limit ?? 50;
